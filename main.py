@@ -1,11 +1,12 @@
+import matplotlib
 from PIL import Image
-from matplotlib import pyplot
+from matplotlib import pyplot, patches
 import numpy as np
 
 
 # Image Digitization
 def get_pixel_data(name):
-    im = Image.open(name, 'r')
+    im = Image.open(name)
     w, h = im.size
     result = list(im.getdata(0)) + list(im.getdata(1)) + list(im.getdata(2))
     result = np.array(result).reshape(3, h, w)
@@ -32,26 +33,34 @@ def calc_convolution(X, filters, stride=1, pad=1):
                 w_start = w * stride
                 w_end = w_start + filter_w
                 # Element-wise multiplication.
-                out[h, w] = np.sum(in_X[c, h_start:h_end, w_start:w_end] * filters[c])
+                out[h, w] = np.sum(-abs(in_X[c, h_start:h_end, w_start:w_end] - filters[c]))
 
     return out
 
 
-# Draw Rectangle
-def draw_square():
-    print("hello")
-
-
-name = 'image.png'
+name = 'image1.png'
 icon_name = 'target1.png'
 digitized = get_pixel_data(name)
 target = get_pixel_data(icon_name)
 conv = calc_convolution(digitized, target)
 
-# print(conv.flatten().sort()[:10])
+fig, ax = pyplot.subplots()
+
+ax.imshow(digitized[0, :, :], cmap='jet')
+conv = conv - conv.min()
+print(conv.max())
+indices = np.argwhere(conv >= conv.max() * .97)
+for index in indices:
+    ax.add_patch(
+        patches.Rectangle(
+            (index[1], index[0]),  # (x, y)
+            target.shape[2], target.shape[1],  # width, height
+            edgecolor='black',
+            fill=False,
+        ))
+
+pyplot.show()
 
 pyplot.figure()
 pyplot.imshow(conv)
-pyplot.jet()
-pyplot.colorbar()
 pyplot.show()
