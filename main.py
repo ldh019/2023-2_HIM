@@ -1,6 +1,9 @@
+import matplotlib.colors
 from PIL import Image
-from matplotlib import pyplot, patches
+from matplotlib import patches
+from matplotlib import pyplot as plt
 import numpy as np
+
 
 def my_padding(img, shape, boundary=0):
     row, col = len(img), len(img[0])
@@ -68,8 +71,8 @@ def my_filtering(img, kernel, boundary=0):
 
 def get_pixel_data(name):
     gray = np.array(Image.open(name).convert("L"))
-    h,w = gray.shape
-    gaus1 = my_getGKernel((5, 5),1.6)
+    h, w = gray.shape
+    gaus1 = my_getGKernel((5, 5), 1.6)
     gaus2 = my_getGKernel((5, 5), 1)
     gaussian1 = my_filtering(gray, gaus1)
     gaussian2 = my_filtering(gray, gaus2)
@@ -78,12 +81,17 @@ def get_pixel_data(name):
         for j in range(w):
             DoG[i][j] = float(gaussian1[i][j]) - float(gaussian2[i][j])
     result = np.array(DoG).reshape(1, h, w)
+
+    result = (result - np.min(result)) / (np.max(result) - np.min(result))
+
     return result
+
+
 def get_pixel_data_target(name):
     gray = np.array(Image.open(name).convert("L"))
     gray_flip = np.flip(gray)
-    h,w = gray_flip.shape
-    gaus1 = my_getGKernel((5, 5),1.6)
+    h, w = gray_flip.shape
+    gaus1 = my_getGKernel((5, 5), 1.6)
     gaus2 = my_getGKernel((5, 5), 1)
     gaussian1 = my_filtering(gray_flip, gaus1)
     gaussian2 = my_filtering(gray_flip, gaus2)
@@ -92,57 +100,78 @@ def get_pixel_data_target(name):
         for j in range(w):
             DoG[i][j] = float(gaussian1[i][j]) - float(gaussian2[i][j])
     result = np.array(DoG).reshape(1, h, w)
+    result = (result - np.min(result)) / (np.max(result) - np.min(result))
     return result
 
 
-def calc_convolution(X, filters, stride=1, pad=1):
+def calc_convolution(X, filters, pad=1):
     _, h, w = X.shape
     filters = np.flip(filters)
     filter_c, filter_h, filter_w = filters.shape
 
-    out_h = (h + 2 * pad - filter_h) // stride + 1
-    out_w = (w + 2 * pad - filter_w) // stride + 1
+    out_h = (h + 2 * pad - filter_h)
+    out_w = (w + 2 * pad - filter_w)
 
     in_X = np.pad(X, [(0, 0), (pad, pad), (pad, pad)], 'constant')
     out = np.zeros((out_h, out_w))
 
     for c in range(filter_c):
         for h in range(out_h):
-            h_start = h * stride
+            h_start = h
             h_end = h_start + filter_h
             for w in range(out_w):
-                w_start = w * stride
+                w_start = w
                 w_end = w_start + filter_w
-                out[h, w] = np.sum(-abs(in_X[c, h_start:h_end, w_start:w_end] * filters[c]))
+                out[h, w] = np.sum(in_X[c, h_start:h_end, w_start:w_end] * filters[c])
 
     return out
 
 
+def firstRgbResult(name, icon_name):
+    image = np.array(Image.open(name).convert("L"))
+    target = np.array(Image.open(icon_name).convert("L"))
+    target = np.flip(target)
+
+    conv = calc_convolution(image, target)
+
+    plt.figure()
+    plt.imshow(conv, cmap='jet')
+    plt.colorbar()
+    plt.show()
+
+
+def finalResult(name, icon_name):
+    origin = np.array(Image.open(name).convert("L"))
+    digitized = get_pixel_data(name)
+    target = get_pixel_data_target(icon_name)
+    conv = calc_convolution(digitized, target)
+
+    plt.figure()
+    plt.imshow(digitized[0], cmap='gray')
+    plt.colorbar()
+    plt.show()
+
+    fig, ax = plt.subplots()
+    ax.imshow(origin, cmap='gray')
+    indices = np.argwhere(conv >= np.max(conv) * .9)
+    for index in indices:
+        ax.add_patch(
+            patches.Rectangle(
+                (index[1], index[0]),
+                target.shape[2], target.shape[1],
+                edgecolor='cyan',
+                fill=False,
+            ))
+
+    plt.figure()
+    plt.imshow(conv, cmap='jet')
+    plt.colorbar()
+    plt.show()
+
+
 name = 'image1.png'
 icon_name = 'target1.png'
-digitized = get_pixel_data(name)
-target = get_pixel_data_target(icon_name)
-conv = calc_convolution(digitized, target)
 
-fig, ax = pyplot.subplots()
+# firstRgbResult(name, icon_name)
 
-ax.imshow(digitized[0, :, :], cmap='gray')
-conv = conv - conv.min()
-print(f"max  !!! {conv.max()}")
-x,y = conv.shape
-print(f"{x}   {y}")
-indices = np.argwhere(conv >= conv.max() * .93)
-for index in indices:
-    print(index)
-    ax.add_patch(
-        patches.Rectangle(
-            (index[1], index[0]),
-            target.shape[2], target.shape[1],
-            edgecolor='cyan',
-            fill=False,
-        ))
-
-
-pyplot.figure()
-pyplot.imshow(conv)
-pyplot.show()
+finalResult(name, icon_name)
